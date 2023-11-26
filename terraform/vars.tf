@@ -32,6 +32,11 @@ variable "lambda_python_runtime_version" {
   type        = string
 }
 
+variable "aws_ip_ranges_url" {
+  description = "URL for the AWS IP prefix ranges."
+  type        = string
+}
+
 variable "slackbot_token_secret_name" {
   description = "The Slackbot's token secret name in Secrets Manager."
   type        = string

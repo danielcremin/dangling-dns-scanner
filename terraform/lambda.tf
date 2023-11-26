@@ -34,18 +34,18 @@ resource "aws_iam_role_policy_attachment" "DanglingDNSScanner_EC2Permissions" {
 
 data "archive_file" "DanglingDNSScanner" {
   type        = "zip"
-  source_dir  = "${path.module}/lambdas/DanglingDNSScanner"
-  output_path = "${path.module}/lambdas/DanglingDNSScanner/main.zip"
+  source_dir  = "../src"
+  output_path = "${path.module}/DanglingDNSScanner/main.zip"
 }
 
 # DanglingDNSScanner - Lambda configuration
 
 resource "aws_lambda_function" "DanglingDNSScanner" {
-  filename      = "${path.module}/lambdas/DanglingDNSScanner/main.zip"
+  filename      = "${path.module}/DanglingDNSScanner/main.zip"
   function_name = "DanglingDNSScanner"
   description   = "This function scans Route53 for dangling DNS A records."
   role          = aws_iam_role.DanglingDNSScanner_IAM_Role.arn
-  handler       = "lambda_function.lambda_handler"
+  handler       = "main.lambda_handler"
   runtime       = var.lambda_python_runtime_version
   memory_size   = 1024
   timeout       = 600
@@ -57,9 +57,10 @@ resource "aws_lambda_function" "DanglingDNSScanner" {
   environment {
     variables = {
 
+      aws_ip_ranges_url          = var.aws_ip_ranges_url
       slackbot_token_secret_name = var.slackbot_token_secret_name
-      slackbot_token_region = var.slackbot_token_region
-      slack_channel_name = var.slack_channel_name
+      slackbot_token_region      = var.slackbot_token_region
+      slack_channel_name         = var.slack_channel_name
     }
   }
 
@@ -73,7 +74,7 @@ resource "aws_lambda_function" "DanglingDNSScanner" {
 resource "aws_cloudwatch_event_rule" "DanglingDNSScanner_EventBridge" {
   name                = "DanglingDNSScanner_EventBridge"
   description         = "This EventBridge triggers DanglingDNSScanner Lambda to run each hour."
-  schedule_expression = "cron(0 * * * *)" # Every hour
+  schedule_expression = "rate(1 hour)"
   depends_on          = [aws_lambda_function.DanglingDNSScanner]
   tags = {
     owner = var.project_owner
