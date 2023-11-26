@@ -16,7 +16,7 @@ class DanglingDNSChecker:
 
     def __init__(self):
 
-        self.aws_ip_range_url = 'https://ip-ranges.amazonaws.com/ip-ranges.json'
+        self.aws_ip_range_url = os.environ['aws_ip_ranges_url']
 
         # Instantiate EC2 & Route53 clients
 
@@ -33,9 +33,9 @@ class DanglingDNSChecker:
 
         # Slackbot details
 
-        self.slackbot_token = os.environ['SLACKBOT_TOKEN_SECRET_NAME']
-        self.slackbot_token_region = os.environ['SLACKBOT_TOKEN_REGION']
-        self.slack_channel = os.environ['SLACK_CHANNEL_NAME']
+        self.slackbot_token = os.environ['slackbot_token_secret_name']
+        self.slackbot_token_region = os.environ['slackbot_token_region']
+        self.slack_channel = os.environ['slack_channel_name']
 
     def get_aws_ip_ranges(self) -> dict:
 
@@ -270,35 +270,33 @@ class DanglingDNSChecker:
 
         return self.helper_functions.send_slack_msg(slackbot_token, self.slack_channel, slack_message)
 
-    def app(self):
+    def app(self, event):
 
-        hosted_zones = self.get_hosted_zones()
-        a_records = self.get_a_records(hosted_zones)
+        if event:
 
-        enabled_regions = self.get_enabled_regions()
+            hosted_zones = self.get_hosted_zones()
+            a_records = self.get_a_records(hosted_zones)
 
-        elastic_ip_list = self.get_elastic_ip_list(enabled_regions)
-        public_ip_list = self.get_public_ip_list(enabled_regions)
+            enabled_regions = self.get_enabled_regions()
 
-        a_record_check_results = self.a_record_ip_check(a_records, elastic_ip_list, public_ip_list)
+            elastic_ip_list = self.get_elastic_ip_list(enabled_regions)
+            public_ip_list = self.get_public_ip_list(enabled_regions)
 
-        dangling_dns_response = self.find_dangling_a_record(a_record_check_results)
+            a_record_check_results = self.a_record_ip_check(a_records, elastic_ip_list, public_ip_list)
 
-        if dangling_dns_response['dangling_record']:
+            dangling_dns_response = self.find_dangling_a_record(a_record_check_results)
 
-            slack_r = self.notify_dangling_record(dangling_dns_response['msg'])
-            if slack_r:
-                logger.info('Notified Slack channel: {} of potential dangling DNS record.'.format(self.slack_channel))
+            if dangling_dns_response['dangling_record']:
 
-        elif not dangling_dns_response['dangling_record']:
-            logger.info('No dangling DNS records discovered for this account. Check response {}'.format(
-                dangling_dns_response['msg']))
+                slack_r = self.notify_dangling_record(dangling_dns_response['msg'])
+                if slack_r:
+                    logger.info(
+                        'Notified Slack channel: {} of potential dangling DNS record.'.format(self.slack_channel))
 
-
-def main():
-    dnc = DanglingDNSChecker()
-    dnc.app()
+            elif not dangling_dns_response['dangling_record']:
+                logger.info('No dangling DNS records discovered for this account. Check response {}'.format(
+                    dangling_dns_response['msg']))
 
 
-if __name__ == '__main__':
-    main()
+def lambda_handler(event, context):
+    DanglingDNSChecker().app(event)
