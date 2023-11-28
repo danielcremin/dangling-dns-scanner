@@ -72,6 +72,7 @@ resource "aws_lambda_function" "DanglingDNSScanner" {
       slackbot_token_secret_name = var.slackbot_token_secret_name
       slackbot_token_region      = var.slackbot_token_region
       slack_channel_name         = var.slack_channel_name
+      aws_account_id             = var.aws_account_id
     }
   }
 
