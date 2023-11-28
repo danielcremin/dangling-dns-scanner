@@ -36,6 +36,7 @@ class DanglingDNSChecker:
         self.slackbot_token_secret_name = os.environ['slackbot_token_secret_name']
         self.slackbot_token_region = os.environ['slackbot_token_region']
         self.slack_channel = os.environ['slack_channel_name']
+        self.aws_account_id = os.environ['aws_account_id']
 
     def get_aws_ip_ranges(self) -> dict:
 
@@ -206,57 +207,65 @@ class DanglingDNSChecker:
 
         for record in a_records:
 
-            record_check = {'a_record': 'parked.example.com', 'ip_address': '0.0.0.0', 'aws_owned': False,
-                            'elastic_ip_match': False, 'public_ip_match': False}
+            record_name = record['Name']
 
-            ip_address = record['ResourceRecords'][0]['Value']
-            record_check.update({'a_record': record['Name'], 'ip_address': ip_address})
+            for resource_record in record.get('ResourceRecords', []):
+                ip_address = resource_record.get('Value')
 
-            if self.check_ip_in_aws_range(ip_address):
-                record_check.update({'aws_owned': True})
+                if ip_address:
+                    record_check = {
+                        'a_record': record_name,
+                        'ip_address': ip_address,
+                        'aws_owned': False,
+                        'elastic_ip_match': False,
+                        'public_ip_match': False,
+                    }
 
-            if ip_address in elastic_ip_list:
-                record_check.update({'elastic_ip_match': True})
+                    if self.check_ip_in_aws_range(ip_address):
+                        record_check.update({'aws_owned': True})
 
-            if ip_address in public_ip_list:
-                record_check.update({'public_ip_match': True})
+                    if ip_address in elastic_ip_list:
+                        record_check.update({'elastic_ip_match': True})
 
-            a_record_check_results.append(record_check)
+                    if ip_address in public_ip_list:
+                        record_check.update({'public_ip_match': True})
+
+                    a_record_check_results.append(record_check)
 
         return a_record_check_results
 
-    def find_dangling_a_record(self, a_record_check_results):
+    def find_dangling_a_record(self, record):
 
         """Checks the items in the a_record_check_results to determine if there
            is an IP address that is owned by AWS, mapped to a Route53 A record
            and does not have a corresponding elastic IP or EC2 public IP address
            which may suggest a dangling DNS record is present.
 
-           :param: a_record_check_results: list of details about a given A record
-           :return: (Print results for now)"""
+           :param: record: Details on a given A record
+           :return: dict: Dangling DNS details on a given A record"""
 
-        for result in a_record_check_results:
+        if record['aws_owned']:
+            if not record['elastic_ip_match'] and not record['public_ip_match']:
 
-            if result['aws_owned']:
-                if not result['elastic_ip_match'] and not result['public_ip_match']:
+                logger.critical('[Potential dangling DNS record] - {}'.format(record))
 
-                    logger.critical('[Potential dangling DNS record] - {}'.format(result))
+                return {'dangling_record': True, 'a_record': record['a_record'],
+                        'ip_address': record['ip_address'], 'aws_owned': record['aws_owned'],
+                        'elastic_ip_match': record['elastic_ip_match'],
+                        'public_ip_match': record['public_ip_match']}
 
-                    return {'dangling_record': True,
-                            'msg': '[Potential dangling DNS record] - {}'.format(result)}
-
-                else:
-                    logger.info('[Matching elastic or public IP in region: {}] - {}'.format(
-                        self.check_ip_aws_region(result['ip_address']), result))
-
-                    return {'dangling_record': False,
-                            'msg': '[Matching elastic or public IP in region: {}] - {}'.format(
-                                self.check_ip_aws_region(result['ip_address']), result)}
             else:
-                logger.info('[A record IP address is not owned by AWS] - {}'.format(result))
+                logger.info('[Matching elastic or public IP in region: {}] - {}'.format(
+                    self.check_ip_aws_region(record['ip_address']), record))
 
                 return {'dangling_record': False,
-                        'msg': '[A record IP address is not owned by AWS] - {}'.format(result)}
+                        'msg': '[Matching elastic or public IP in region: {}] - {}'.format(
+                            self.check_ip_aws_region(record['ip_address']), record)}
+        else:
+            logger.info('[A record IP address is not owned by AWS] - {}'.format(record))
+
+            return {'dangling_record': False,
+                    'msg': '[A record IP address is not owned by AWS] - {}'.format(record)}
 
     def notify_dangling_record(self, slack_message) -> bool:
 
@@ -273,6 +282,19 @@ class DanglingDNSChecker:
 
     def app(self, event):
 
+        """When the Lambda receives a scheduled EventBridge trigger, Route53 is queried
+           for a list of it's hosted zones and the A records within those zones.
+
+           A list of enabled regions is populated and a list of Elastic and Public IPs
+           is generated for all regions in the given account.
+
+           Each IP associated with an A record is checked to verify if it exists in either
+           the Elastic or Public IP list and if it is owned by AWS. If it is not on either
+           list and owned by AWS, the IP is flagged as a potential IP that is associated
+           with a dangling DNS record.
+
+           :param event: An EventBridge scheduled trigger"""
+
         if event:
 
             hosted_zones = self.get_hosted_zones()
@@ -285,18 +307,21 @@ class DanglingDNSChecker:
 
             a_record_check_results = self.a_record_ip_check(a_records, elastic_ip_list, public_ip_list)
 
-            dangling_dns_response = self.find_dangling_a_record(a_record_check_results)
+            for record in a_record_check_results:
 
-            if dangling_dns_response['dangling_record']:
+                dangling_dns_response = self.find_dangling_a_record(record)
 
-                slack_r = self.notify_dangling_record(dangling_dns_response['msg'])
-                if slack_r:
-                    logger.info(
-                        'Notified Slack channel: {} of potential dangling DNS record.'.format(self.slack_channel))
+                if dangling_dns_response['dangling_record']:
 
-            elif not dangling_dns_response['dangling_record']:
-                logger.info('No dangling DNS records discovered for this account. Check response {}'.format(
-                    dangling_dns_response['msg']))
+                    slack_r = self.notify_dangling_record(self.helper_functions.slack_msg_blocks(record,
+                                                                                                 self.aws_account_id))
+                    if slack_r:
+                        logger.info(
+                            'Notified Slack channel: {} of potential dangling DNS record.'.format(self.slack_channel))
+
+                elif not dangling_dns_response['dangling_record']:
+                    logger.info('No dangling DNS records discovered for this account. Check response {}'.format(
+                        dangling_dns_response['msg']))
 
 
 def lambda_handler(event, context):

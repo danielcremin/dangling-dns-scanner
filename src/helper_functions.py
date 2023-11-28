@@ -22,8 +22,8 @@ class HelperFunctions:
 
         try:
             return boto3.client(
-                service_name = client_type,
-                region_name = region
+                service_name=client_type,
+                region_name=region
             )
         except ClientError as e:
 
@@ -52,7 +52,7 @@ class HelperFunctions:
         except ClientError as e:
             logger.error('[Client Error] - {}'.format(e))
 
-    def send_slack_msg(self, slackbot_token, slack_channel, slack_message) -> bool:
+    def send_slack_msg(self, slackbot_token, slack_channel, slack_message_blocks) -> bool:
 
         """Sends a message to a specific Slack channel using the Slack SDK library
 
@@ -66,7 +66,8 @@ class HelperFunctions:
         try:
             response = client.chat_postMessage(
                 channel=slack_channel,
-                text=slack_message
+                text="Message cannot be rendered",
+                blocks=slack_message_blocks
             )
             if response['ok']:
                 logger.info('Slack message sent to channel: {}'.format(slack_channel))
@@ -79,3 +80,74 @@ class HelperFunctions:
         except SlackApiError as e:
             logger.error('[SlackApiError] - {}'.format(e.response['error']))
             return False
+
+    def slack_msg_blocks(self, dangling_dns_response, aws_account_id) -> list:
+
+        """Formats & populates the Slack message block to send to Slack
+
+           :param: dangling_dns_response: dict: of a potential dangling DNS record
+           :return: list: Slack message block"""
+
+        blocks = [
+            {
+                "type": "header",
+                "text": {
+                    "type": "plain_text",
+                    "text": ":rotating_light: Potential Dangling DNS Record Found :rotating_light:",
+                    "emoji": True
+                }
+            },
+            {
+                "type": "divider"
+            },
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": "*A Record:* {}".format(dangling_dns_response['a_record'])
+                }
+            },
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": "*IP Address:* {}".format(dangling_dns_response['ip_address'])
+                }
+            },
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": "*AWS Owned IP:* {}".format(dangling_dns_response['aws_owned'])
+                }
+            },
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": "*Matching Elastic IP in Account:* {}".format(dangling_dns_response['elastic_ip_match'])
+                }
+            },
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": "*Matching Public IP in Account:* {}".format(dangling_dns_response['public_ip_match'])
+                }
+            },
+            {
+                "type": "divider"
+            },
+            {
+                "type": "context",
+                "elements": [
+                    {
+                        "type": "mrkdwn",
+                        "text": "*AWS Account ID:* {} | <https://github.com/danielcremin/dangling-dns-scanner|Scanner "
+                                "Github Documentation>".format(aws_account_id)
+                    }
+                ]
+            }
+        ]
+
+        return blocks
