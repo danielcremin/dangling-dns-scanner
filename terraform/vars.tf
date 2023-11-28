@@ -51,3 +51,8 @@ variable "slack_channel_name" {
   description = "The name of the Slack channel to send notifications to."
   type        = string
 }
+
+variable "slackbot_token_secret" {
+  description = "The OAuth token for the Slackbot."
+  type        = string
+}
