@@ -42,10 +42,10 @@ data "archive_file" "DanglingDNSScanner" {
 
 resource "aws_lambda_layer_version" "python_layer" {
   layer_name          = "dangling_dns_scanner_layer"
-  filename            = "${path.module}/DanglingDNSScanner/dangling_dns_scanner_layer.zip"
+  filename            = "${path.module}/layers/dangling_dns_scanner_layer.zip"
   description         = "Additional packages required for execution."
   compatible_runtimes = [var.lambda_python_runtime_version]
-  source_code_hash    = filebase64("${path.module}/DanglingDNSScanner/dangling_dns_scanner_layer.zip")
+  source_code_hash    = filebase64("${path.module}/layers/dangling_dns_scanner_layer.zip")
 }
 
 # DanglingDNSScanner - Lambda configuration
