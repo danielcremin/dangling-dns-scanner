@@ -42,7 +42,7 @@ class HelperFunctions:
         try:
             r = sm_client.get_secret_value(SecretId=secret_name)
 
-            secret = r['SecretString']
+            secret = r.get('SecretString')
 
             return secret
 

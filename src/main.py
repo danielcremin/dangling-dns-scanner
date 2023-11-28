@@ -33,7 +33,7 @@ class DanglingDNSChecker:
 
         # Slackbot details
 
-        self.slackbot_token = os.environ['slackbot_token_secret_name']
+        self.slackbot_token_secret_name = os.environ['slackbot_token_secret_name']
         self.slackbot_token_region = os.environ['slackbot_token_region']
         self.slack_channel = os.environ['slack_channel_name']
 
@@ -124,6 +124,7 @@ class DanglingDNSChecker:
 
            :return: list: of enabled regions"""
 
+        regions = None
         enabled_regions = []
 
         try:
@@ -265,7 +266,7 @@ class DanglingDNSChecker:
            :param: slack_message: to send
            :return: bool: True/False on a successfully sent message"""
 
-        slackbot_token = self.helper_functions.sm_retrieve_secret(self.slackbot_token,
+        slackbot_token = self.helper_functions.sm_retrieve_secret(self.slackbot_token_secret_name,
                                                                   self.slackbot_token_region)
 
         return self.helper_functions.send_slack_msg(slackbot_token, self.slack_channel, slack_message)
