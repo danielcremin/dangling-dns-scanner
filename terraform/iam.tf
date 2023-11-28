@@ -53,7 +53,7 @@ data "aws_iam_policy_document" "DanglingDNSScanner_RetrieveSecretManagerSecret_D
   statement {
     effect    = "Allow"
     actions   = ["secretsmanager:GetSecretValue", "secretsmanager:ListSecrets"]
-    resources = ["arn:aws:secretsmanager:${var.aws_region}:${var.aws_account_id}:secret:${var.slackbot_token_secret_name}"]
+    resources = [aws_secretsmanager_secret.slackbot_token_secret.id]
   }
 }
 
@@ -71,9 +71,10 @@ resource "aws_iam_policy" "DanglingDNSScanner_Route53GetHostedZones" {
 data "aws_iam_policy_document" "DanglingDNSScanner_Route53GetHostedZones_Document" {
 
   statement {
-    effect    = "Allow"
-    actions   = ["route53:GetHostedZone", "route53:ListHostedZones", "route53:ListHostedZonesByName"]
-    resources = ["arn:aws:route53:::*/*"]
+    effect = "Allow"
+    actions = ["route53:GetHostedZone", "route53:ListHostedZones",
+    "route53:ListHostedZonesByName", "route53:ListResourceRecordSets"]
+    resources = ["*"]
   }
 }
 
@@ -92,7 +93,7 @@ data "aws_iam_policy_document" "DanglingDNSScanner_EC2Permissions_Document" {
 
   statement {
     effect    = "Allow"
-    actions   = ["ec2:DescribeAddresses", "ec2:DescribeInstances", "ec2:DescribeRegions"]
-    resources = ["arn:aws:ec2:${var.aws_region}:${var.aws_account_id}:*/*"]
+    actions   = ["ec2:DescribeRegions", "ec2:DescribeAddresses", "ec2:DescribeInstances"]
+    resources = ["*"]
   }
 }

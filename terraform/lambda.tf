@@ -38,10 +38,21 @@ data "archive_file" "DanglingDNSScanner" {
   output_path = "${path.module}/DanglingDNSScanner/main.zip"
 }
 
+# DanglingDNSScanner - Lambda layer configuration
+
+resource "aws_lambda_layer_version" "python_layer" {
+  layer_name          = "dangling_dns_scanner_layer"
+  filename            = "${path.module}/DanglingDNSScanner/dangling_dns_scanner_layer.zip"
+  description         = "Additional packages required for execution."
+  compatible_runtimes = [var.lambda_python_runtime_version]
+  source_code_hash    = filebase64("${path.module}/DanglingDNSScanner/dangling_dns_scanner_layer.zip")
+}
+
 # DanglingDNSScanner - Lambda configuration
 
 resource "aws_lambda_function" "DanglingDNSScanner" {
   filename      = "${path.module}/DanglingDNSScanner/main.zip"
+  layers        = [aws_lambda_layer_version.python_layer.arn]
   function_name = "DanglingDNSScanner"
   description   = "This function scans Route53 for dangling DNS A records."
   role          = aws_iam_role.DanglingDNSScanner_IAM_Role.arn
